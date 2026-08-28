@@ -117,6 +117,10 @@ def main():
     src = sys.argv[1]
     out_path = None
     scale = 2.0
+    # 可选模块开关(默认关):--ocr-formula 公式识别 / --ocr-seal 印章识别 / --ocr-chart 图表识别
+    use_formula = False
+    use_seal = False
+    use_chart = False
     args = sys.argv[2:]
     i = 0
     while i < len(args):
@@ -126,6 +130,15 @@ def main():
         elif args[i] == "--scale" and i + 1 < len(args):
             scale = float(args[i + 1])
             i += 2
+        elif args[i] == "--ocr-formula":
+            use_formula = True
+            i += 1
+        elif args[i] == "--ocr-seal":
+            use_seal = True
+            i += 1
+        elif args[i] == "--ocr-chart":
+            use_chart = True
+            i += 1
         else:
             i += 1
 
@@ -138,16 +151,17 @@ def main():
         return 1
 
     ext = Path(src).suffix.lower()
-    # 精简管线:默认关闭公式/印章/图表识别(普通扫描件用不到,且公式模型 701MB、
-    # 印章/图表检测在 CPU 上极慢),保留版面分析、表格识别与 OCR——速度提升约 15~25 倍。
+    # 默认管线:版面分析 + server 版 OCR + 表格识别,并开启文档方向分类/矫正/文本行方向
+    # (扫描件歪斜/旋转时自动修正,开销极小)。公式/印章/图表识别默认关闭(公式模型 701MB、
+    # 印章/图表检测在 CPU 上慢,普通扫描件用不到),可用 --ocr-formula/--ocr-seal/--ocr-chart 开启。
     engine = PPStructureV3(
         lang="ch",
-        use_doc_orientation_classify=False,
-        use_doc_unwarping=False,
-        use_textline_orientation=False,
-        use_formula_recognition=False,
-        use_seal_recognition=False,
-        use_chart_recognition=False,
+        use_doc_orientation_classify=True,
+        use_doc_unwarping=True,
+        use_textline_orientation=True,
+        use_formula_recognition=use_formula,
+        use_seal_recognition=use_seal,
+        use_chart_recognition=use_chart,
         enable_mkldnn=False,
     )
 

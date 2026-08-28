@@ -25,6 +25,7 @@ Convert Office documents and PDFs (including scanned ones) to Markdown with **st
 - **Node.js ≥ 18**
 - Legacy formats (`.doc/.xls/.ppt`): on **Windows** require **WPS Office** or **Microsoft Office** (COM auto-detected); on **Linux/macOS** require **LibreOffice** (`apt install libreoffice`; auto-detects `soffice`)
 - Scanned-PDF OCR always uses Baidu **PP-StructureV3** (CPU-only, no GPU needed); on headless Linux servers install CJK fonts (`fonts-noto-cjk`)
+- **Default pipeline**: document orientation correction / layout analysis / table recognition / text OCR; formula, seal and chart recognition are **off by default** — enable with `--ocr-formula` / `--ocr-seal` / `--ocr-chart` (pre-download models first: `dsh-md-convert deps --ocr-formula`)
 - **Local models**: OCR models are downloaded once to the local cache (`~/.paddlex/official_models/`, a few hundred MB) via `dsh-md-convert deps`; **after that, runs are fully offline** — no network checks, OCR works without internet
 
 **Auto-install of dependencies (default on)**: on first scanned-PDF conversion the plugin
@@ -77,6 +78,11 @@ dsh-md-convert scan.pdf -o ./md
 
 # Pin a Python interpreter (multi-Python setups)
 dsh-md-convert scan.pdf -o ./md --ocr-python "C:\path\to\python.exe"
+
+# Optional OCR modules (off by default; pre-download models first: dsh-md-convert deps --ocr-formula)
+dsh-md-convert formula-doc.pdf -o ./md --ocr-formula   # formula recognition
+dsh-md-convert doc.pdf -o ./md --ocr-seal              # seal recognition
+dsh-md-convert chart-doc.pdf -o ./md --ocr-chart       # chart recognition
 
 # Check / install OCR deps and models
 dsh-md-convert check        # status only, no install
@@ -133,6 +139,9 @@ Plugin config (`cordis.patch.yml`):
         autoInstallDeps: true # auto pip-install missing OCR deps
         ocr:
           python: ""          # Python interpreter (empty = auto-detect)
+          formula: false      # enable formula recognition (default off; pre-download: dsh-md-convert deps --ocr-formula)
+          seal: false         # enable seal recognition (default off)
+          chart: false        # enable chart recognition (default off)
         legacy:
           backend: "auto"     # auto | wps | office | libreoffice (auto: COM on Windows, LibreOffice elsewhere)
 ```

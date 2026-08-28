@@ -25,6 +25,7 @@
 - **Node.js ≥ 18**
 - 老格式转换(`.doc/.xls/.ppt`):Windows 需本机装有 **WPS Office** 或 **Microsoft Office**(COM 自动探测);Linux/macOS 需 **LibreOffice**(`apt install libreoffice`,自动探测 `soffice`)
 - 扫描件 OCR **固定使用百度 PP-StructureV3**(CPU 即可,无需 GPU);Linux 无头服务器建议安装中文字体 `fonts-noto-cjk`
+- **默认管线**:文档方向矫正/版面分析/表格识别/文本 OCR;公式、印章、图表识别**默认关闭**,可用 `--ocr-formula` / `--ocr-seal` / `--ocr-chart` 开启(开启前先 `dsh-md-convert deps --ocr-formula` 预下载对应模型)
 - **模型本地化**:OCR 模型首次经 `dsh-md-convert deps` 联网下载到本地缓存(`~/.paddlex/official_models/`,约数百 MB);**之后运行完全离线**,不做任何网络检查,断网可正常 OCR
 
 **依赖自动安装(默认开启)**:首次转换扫描件时,插件自动检测 Python 与 OCR 依赖
@@ -76,6 +77,11 @@ dsh-md-convert scan.pdf -o ./md
 
 # 指定 Python 解释器(多 Python 环境时)
 dsh-md-convert scan.pdf -o ./md --ocr-python "C:\path\to\python.exe"
+
+# 可选 OCR 模块(默认关;开启前先 dsh-md-convert deps --ocr-formula 预下载模型)
+dsh-md-convert formula-doc.pdf -o ./md --ocr-formula   # 公式识别
+dsh-md-convert doc.pdf -o ./md --ocr-seal              # 印章识别
+dsh-md-convert chart-doc.pdf -o ./md --ocr-chart       # 图表识别
 
 # 检查 / 安装 OCR 依赖与模型
 dsh-md-convert check        # 只检查状态,不安装
@@ -132,6 +138,9 @@ md_convert({ file: "报告.docx", outDir: "./md" })
         autoInstallDeps: true # 缺 OCR 依赖时自动 pip 安装
         ocr:
           python: ""          # Python 解释器(运行 PP-StructureV3;空则自动探测)
+          formula: false      # 开启公式识别(默认关;需 dsh-md-convert deps --ocr-formula 预下载模型)
+          seal: false         # 开启印章识别(默认关)
+          chart: false        # 开启图表识别(默认关)
         legacy:
           backend: "auto"     # auto | wps | office | libreoffice(auto:Windows 用 COM,其余平台用 LibreOffice)
 ```
