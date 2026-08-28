@@ -1,5 +1,7 @@
 # dsh-md-convert
 
+[![License: MIT](https://img.shields.io/badge/license-MIT-4D6BFE)](LICENSE)
+
 Convert Office documents and PDFs (including scanned ones) to Markdown with **structurally preserved formatting**, powered by [MarkItDown](https://github.com/microsoft/markitdown). Ships both a **CLI** and a **dsh agent tool** (`md_convert`).
 
 - **AI Agent usage guide**: [README.agent.md](README.agent.md) (error-code handling / batch rules / call conventions)
@@ -166,4 +168,4 @@ node test/run-smoke.mjs          # full pipeline across 7 formats (needs local W
 
 ## License
 
-MIT
+[MIT](LICENSE) © 2026 YAKO

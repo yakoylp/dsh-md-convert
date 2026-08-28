@@ -1,5 +1,7 @@
 # dsh-md-convert
 
+[![License: MIT](https://img.shields.io/badge/license-MIT-4D6BFE)](LICENSE)
+
 将 Office 文档与 PDF(含扫描件)转换为**保留结构级排版**的 Markdown,基于 [MarkItDown](https://github.com/microsoft/markitdown) 引擎。提供 **CLI 命令行**与 **dsh agent 工具**(`md_convert`)双入口。
 
 - **AI Agent 使用规范**:[README.agent.md](README.agent.md)(错误码处理/批量规范/调用约定)
@@ -164,4 +166,4 @@ node test/run-smoke.mjs          # 7 种格式全链路(依赖本机 WPS/Office 
 
 ## 许可证
 
-MIT
+[MIT](LICENSE) © 2026 YAKO
