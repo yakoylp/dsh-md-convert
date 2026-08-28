@@ -14,7 +14,7 @@ Convert Office documents and PDFs (including scanned ones) to Markdown with **st
 | `.docx` / `.xlsx` / `.pptx` | MarkItDown direct | Headings/lists/tables/paragraphs kept as Markdown |
 | `.pdf` (with text layer) | MarkItDown direct | Falls back to **PP-StructureV3** automatically when the text layer is empty |
 | `.pdf` (scanned) | **PP-StructureV3** (layout analysis + OCR) → Markdown | Headings/body/tables/formulas/stamps assembled in reading order, CPU-only |
-| `.doc` / `.xls` / `.ppt` | WPS/Office COM re-save to modern format → MarkItDown | Backend auto-detected, configurable |
+| `.doc` / `.xls` / `.ppt` | WPS/Office COM (Windows) or LibreOffice (other platforms) re-save to modern format → MarkItDown | Backend auto-detected, configurable |
 | `.html/.csv/.json/.xml/.ipynb/.md/.txt/...` | MarkItDown / direct read | Everything MarkItDown supports |
 
 > **"Structural formatting"** = heading levels (H1–H6), lists, tables (pipe tables), paragraph order are preserved.
@@ -23,8 +23,8 @@ Convert Office documents and PDFs (including scanned ones) to Markdown with **st
 ## Environment & dependencies
 
 - **Node.js ≥ 18**
-- Legacy formats (`.doc/.xls/.ppt`) require **WPS Office** or **Microsoft Office** installed (COM auto-detected)
-- Scanned-PDF OCR always uses Baidu **PP-StructureV3** (CPU-only, no GPU needed)
+- Legacy formats (`.doc/.xls/.ppt`): on **Windows** require **WPS Office** or **Microsoft Office** (COM auto-detected); on **Linux/macOS** require **LibreOffice** (`apt install libreoffice`; auto-detects `soffice`)
+- Scanned-PDF OCR always uses Baidu **PP-StructureV3** (CPU-only, no GPU needed); on headless Linux servers install CJK fonts (`fonts-noto-cjk`)
 
 **Auto-install of dependencies (default on)**: on first scanned-PDF conversion the plugin
 detects Python and the OCR packages (`paddlepaddle` `paddleocr` `paddlex[ocr]` `pypdfium2`);
@@ -65,7 +65,7 @@ node lib/cli.js <files...> -o <output-dir>
 # Basic: batch convert
 dsh-md-convert a.docx b.pdf -o ./md
 
-# Legacy formats (auto probe WPS→Office)
+# Legacy formats (auto: WPS→Office on Windows, LibreOffice on Linux/macOS)
 dsh-md-convert old.doc old.xls old.ppt -o ./md
 
 # Force a specific legacy backend
@@ -93,7 +93,7 @@ Every failure carries a **stable error code** so callers (CLI / agent tool / SDK
 | `E_FILE_NOT_FOUND` | Source file missing | Check the path |
 | `E_UNSUPPORTED_FORMAT` | Extension not supported | Use another format |
 | `E_MARKITDOWN` | MarkItDown conversion failed | Usually corrupt/encrypted file; retry once |
-| `E_LEGACY_CONVERT` | Legacy COM re-save failed | WPS/Office required; built-in retry on busy |
+| `E_LEGACY_CONVERT` | Legacy re-save failed (COM/LibreOffice) | WPS/Office on Windows, LibreOffice elsewhere; built-in retry on busy |
 | `E_OCR_DEPS` | OCR deps missing (install failed/disabled) | Run `dsh-md-convert deps` |
 | `E_OCR_RUN` | PP-StructureV3 execution failed | Retry, or lower `--ocr-scale` |
 | `E_OCR_EMPTY` | Scanned page yielded no text | Check scan quality |
@@ -133,14 +133,19 @@ Plugin config (`cordis.patch.yml`):
         ocr:
           python: ""          # Python interpreter (empty = auto-detect)
         legacy:
-          backend: "auto"     # auto | wps | office
+          backend: "auto"     # auto | wps | office | libreoffice (auto: COM on Windows, LibreOffice elsewhere)
 ```
 
 ## Legacy format backends
 
-`.doc/.xls/.ppt` are re-saved to modern formats before MarkItDown. Backend probe order: **WPS → MS Office**;
-both are driven through COM (PowerShell scripts). If Office/WPS is busy, the plugin retries automatically
-(it never kills user processes).
+`.doc/.xls/.ppt` are re-saved to modern formats before MarkItDown. The backend is chosen per platform:
+
+| Platform | auto backend | Implementation |
+| --- | --- | --- |
+| Windows | **WPS → MS Office** | COM (PowerShell scripts); auto-retries when Office/WPS is busy (never kills user processes) |
+| Linux / macOS | **LibreOffice** | `soffice --headless --convert-to`; requires LibreOffice (auto-detects `soffice`/`libreoffice`) |
+
+Use `--legacy-backend wps | office | libreoffice` to force a specific backend (e.g. Windows without WPS/Office but with LibreOffice installed: `--legacy-backend libreoffice`).
 
 ## Temp-file cleanup
 
@@ -151,7 +156,8 @@ both are driven through COM (PowerShell scripts). If Office/WPS is busy, the plu
 ## Tests
 
 ```sh
-node test/run-smoke.mjs          # full pipeline across 7 formats (needs local WPS/Office + PP-StructureV3)
+npm test                     # unit tests (backend split, LibreOffice mock)
+node test/run-smoke.mjs      # full pipeline across 7 formats (Windows: WPS/Office + PP-StructureV3; Linux: LibreOffice)
 ```
 
 ## Known issues

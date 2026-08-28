@@ -14,7 +14,7 @@
 | `.docx` / `.xlsx` / `.pptx` | MarkItDown 直转 | 标题/列表/表格/段落保留为 Markdown |
 | `.pdf`(含文字层) | MarkItDown 直转 | 文字层为空时**自动回退 PP-StructureV3** |
 | `.pdf`(扫描件) | **PP-StructureV3**(版面分析 + OCR)→ Markdown | 标题/正文/表格/公式/印章按阅读顺序拼装,纯 CPU |
-| `.doc` / `.xls` / `.ppt` | WPS/Office COM 另存为新格式 → MarkItDown | 后端自动探测,可配置 |
+| `.doc` / `.xls` / `.ppt` | WPS/Office COM(Windows)或 LibreOffice(其余平台)另存为新格式 → MarkItDown | 后端自动探测,可配置 |
 | `.html/.csv/.json/.xml/.ipynb/.md/.txt/...` | MarkItDown / 直接读取 | MarkItDown 支持的全部格式 |
 
 > **"结构级排版"** = 标题层级(H1–H6)、列表、表格(管道表格)、段落顺序均保留。
@@ -23,8 +23,8 @@
 ## 环境依赖
 
 - **Node.js ≥ 18**
-- 老格式转换(`.doc/.xls/.ppt`)需要本机装有 **WPS Office** 或 **Microsoft Office**(COM 自动探测)
-- 扫描件 OCR **固定使用百度 PP-StructureV3**(CPU 即可,无需 GPU)
+- 老格式转换(`.doc/.xls/.ppt`):Windows 需本机装有 **WPS Office** 或 **Microsoft Office**(COM 自动探测);Linux/macOS 需 **LibreOffice**(`apt install libreoffice`,自动探测 `soffice`)
+- 扫描件 OCR **固定使用百度 PP-StructureV3**(CPU 即可,无需 GPU);Linux 无头服务器建议安装中文字体 `fonts-noto-cjk`
 
 **依赖自动安装(默认开启)**:首次转换扫描件时,插件自动检测 Python 与 OCR 依赖
 (`paddlepaddle` `paddleocr` `paddlex[ocr]` `pypdfium2`),**有则直接使用,缺则自动 `pip install`**,
@@ -64,7 +64,7 @@ node lib/cli.js <文件...> -o <输出目录>
 # 基本:批量转换
 dsh-md-convert a.docx b.pdf -o ./md
 
-# 老格式(自动探测 WPS→Office)
+# 老格式(自动探测:Windows 用 WPS→Office,Linux/macOS 用 LibreOffice)
 dsh-md-convert old.doc old.xls old.ppt -o ./md
 
 # 强制指定老格式后端
@@ -92,7 +92,7 @@ dsh-md-convert deps         # 检查并自动安装缺失依赖
 | `E_FILE_NOT_FOUND` | 源文件不存在 | 检查路径 |
 | `E_UNSUPPORTED_FORMAT` | 扩展名不受支持 | 更换格式 |
 | `E_MARKITDOWN` | MarkItDown 转换失败 | 多为文件损坏/加密,可重试 |
-| `E_LEGACY_CONVERT` | 老格式 COM 另存失败 | 需本机 WPS/Office;已内置自动重试 |
+| `E_LEGACY_CONVERT` | 老格式另存失败(COM/LibreOffice) | Windows 需 WPS/Office、其余平台需 LibreOffice;已内置自动重试 |
 | `E_OCR_DEPS` | 缺 OCR 依赖(自动安装失败/已禁用) | 执行 `dsh-md-convert deps` |
 | `E_OCR_RUN` | PP-StructureV3 执行失败 | 重试或降低 `--ocr-scale` |
 | `E_OCR_EMPTY` | 扫描件未识别出内容 | 检查扫描质量 |
@@ -132,13 +132,19 @@ md_convert({ file: "报告.docx", outDir: "./md" })
         ocr:
           python: ""          # Python 解释器(运行 PP-StructureV3;空则自动探测)
         legacy:
-          backend: "auto"     # auto | wps | office
+          backend: "auto"     # auto | wps | office | libreoffice(auto:Windows 用 COM,其余平台用 LibreOffice)
 ```
 
 ## 老格式转换后端
 
-`.doc/.xls/.ppt` 先另存为现代格式再交给 MarkItDown。后端自动探测顺序:**WPS → MS Office**;
-均通过 COM(PowerShell 脚本)实现,转换期间若 Office/WPS 正在运行会自动重试(不会杀用户进程)。
+`.doc/.xls/.ppt` 先另存为现代格式再交给 MarkItDown。后端自动按平台选择:
+
+| 平台 | auto 后端 | 实现 |
+| --- | --- | --- |
+| Windows | **WPS → MS Office** | COM(PowerShell 脚本);WPS/Office 正在运行时自动重试(不会杀用户进程) |
+| Linux / macOS | **LibreOffice** | `soffice --headless --convert-to`,需安装 LibreOffice(自动探测 `soffice`/`libreoffice`) |
+
+可用 `--legacy-backend wps | office | libreoffice` 显式指定(如 Windows 无 WPS/Office 但装了 LibreOffice,可强制 `--legacy-backend libreoffice`)。
 
 ## 临时文件清理
 
@@ -149,7 +155,8 @@ md_convert({ file: "报告.docx", outDir: "./md" })
 ## 测试
 
 ```sh
-node test/run-smoke.mjs          # 7 种格式全链路(依赖本机 WPS/Office + PP-StructureV3)
+npm test                     # 单元测试(后端分流、LibreOffice mock)
+node test/run-smoke.mjs      # 7 种格式全链路(Windows 需 WPS/Office + PP-StructureV3;Linux 需 LibreOffice)
 ```
 
 ## 已知问题
