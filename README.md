@@ -166,4 +166,4 @@ node test/run-smoke.mjs          # 7 种格式全链路(依赖本机 WPS/Office 
 
 ## 许可证
 
-[MIT](LICENSE) © 2026 YAKO
+[MIT](LICENSE) © 2026 yakoylp

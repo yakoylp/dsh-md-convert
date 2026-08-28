@@ -168,4 +168,4 @@ node test/run-smoke.mjs          # full pipeline across 7 formats (needs local W
 
 ## License
 
-[MIT](LICENSE) © 2026 YAKO
+[MIT](LICENSE) © 2026 yakoylp

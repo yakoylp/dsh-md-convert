@@ -4,7 +4,7 @@
   "description": "Convert Office documents (.doc/.docx/.xls/.xlsx/.ppt/.pptx) and PDFs (incl. scanned, via local OCR) to structurally-formatted Markdown, powered by MarkItDown. CLI + dsh agent tool.",
   "type": "module",
   "license": "MIT",
-  "author": "YAKO",
+  "author": "yakoylp",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/yakoylp/dsh-md-convert.git"
