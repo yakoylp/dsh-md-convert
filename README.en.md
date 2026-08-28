@@ -84,6 +84,9 @@ dsh-md-convert formula-doc.pdf -o ./md --ocr-formula   # formula recognition
 dsh-md-convert doc.pdf -o ./md --ocr-seal              # seal recognition
 dsh-md-convert chart-doc.pdf -o ./md --ocr-chart       # chart recognition
 
+# Fast mode (PP-OCRv5 mobile models, ~40% faster, slightly lower accuracy; pre-download: dsh-md-convert deps --ocr-fast)
+dsh-md-convert scan.pdf -o ./md --ocr-fast
+
 # Check / install OCR deps and models
 dsh-md-convert check        # status only, no install
 dsh-md-convert deps         # install missing deps and pre-download OCR models (one network run; offline afterwards)
@@ -142,6 +145,7 @@ Plugin config (`cordis.patch.yml`):
           formula: false      # enable formula recognition (default off; pre-download: dsh-md-convert deps --ocr-formula)
           seal: false         # enable seal recognition (default off)
           chart: false        # enable chart recognition (default off)
+          fast: false         # fast mode: PP-OCRv5 mobile models (~40% faster, slightly lower accuracy)
         legacy:
           backend: "auto"     # auto | wps | office | libreoffice (auto: COM on Windows, LibreOffice elsewhere)
 ```

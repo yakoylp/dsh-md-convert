@@ -83,6 +83,9 @@ dsh-md-convert formula-doc.pdf -o ./md --ocr-formula   # 公式识别
 dsh-md-convert doc.pdf -o ./md --ocr-seal              # 印章识别
 dsh-md-convert chart-doc.pdf -o ./md --ocr-chart       # 图表识别
 
+# 快速模式(用 PP-OCRv5 mobile 模型,约快 40%,精度略降;模型需 dsh-md-convert deps --ocr-fast 预下载)
+dsh-md-convert scan.pdf -o ./md --ocr-fast
+
 # 检查 / 安装 OCR 依赖与模型
 dsh-md-convert check        # 只检查状态,不安装
 dsh-md-convert deps         # 安装缺失依赖并预下载 OCR 模型到本地(需联网一次,之后离线可用)
@@ -141,6 +144,7 @@ md_convert({ file: "报告.docx", outDir: "./md" })
           formula: false      # 开启公式识别(默认关;需 dsh-md-convert deps --ocr-formula 预下载模型)
           seal: false         # 开启印章识别(默认关)
           chart: false        # 开启图表识别(默认关)
+          fast: false         # 快速模式:PP-OCRv5 mobile 模型(更快约 40%,精度略降)
         legacy:
           backend: "auto"     # auto | wps | office | libreoffice(auto:Windows 用 COM,其余平台用 LibreOffice)
 ```

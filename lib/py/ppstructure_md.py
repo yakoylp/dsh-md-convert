@@ -121,6 +121,8 @@ def main():
     use_formula = False
     use_seal = False
     use_chart = False
+    # --ocr-fast:用 PP-OCRv5 mobile 检测/识别模型(更快,精度略降)
+    use_fast = False
     args = sys.argv[2:]
     i = 0
     while i < len(args):
@@ -138,6 +140,9 @@ def main():
             i += 1
         elif args[i] == "--ocr-chart":
             use_chart = True
+            i += 1
+        elif args[i] == "--ocr-fast":
+            use_fast = True
             i += 1
         else:
             i += 1
@@ -162,6 +167,8 @@ def main():
         use_formula_recognition=use_formula,
         use_seal_recognition=use_seal,
         use_chart_recognition=use_chart,
+        text_detection_model_name="PP-OCRv5_mobile_det" if use_fast else None,
+        text_recognition_model_name="PP-OCRv5_mobile_rec" if use_fast else None,
         enable_mkldnn=False,
     )
 
