@@ -1,0 +1,8 @@
+# dsh-md-convert bundle patch: 把本插件的 Node 半区挂入 profile 组合。
+#
+# `dsh plugin add` 安装后会自动作为 bundle 层参与 profile 组合(与官方 bundle patch 一致)。
+# 插件本体注册一个 `md_convert` agent 工具;命令行入口由 package.json 的 bin 提供
+# (dsh-md-convert),不依赖 cordis 运行。
+- insert:
+    - id: dsh-md-convert
+      name: dsh-md-convert
