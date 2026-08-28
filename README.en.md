@@ -156,8 +156,9 @@ Use `--legacy-backend wps | office | libreoffice` to force a specific backend (e
 ## Tests
 
 ```sh
-npm test                     # unit tests (backend split, LibreOffice mock)
-node test/run-smoke.mjs      # full pipeline across 7 formats (Windows: WPS/Office + PP-StructureV3; Linux: LibreOffice)
+npm test                       # unit tests (backend split, LibreOffice mock)
+node test/run-smoke.mjs        # smoke across 7 formats (Windows: WPS/Office; Linux: LibreOffice)
+node test/run-smoke.mjs --all --reference   # all 8 formats (incl. scanned OCR) and write reference outputs to test/fixtures/final-out/
 ```
 
 ## Known issues

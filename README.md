@@ -155,8 +155,9 @@ md_convert({ file: "报告.docx", outDir: "./md" })
 ## 测试
 
 ```sh
-npm test                     # 单元测试(后端分流、LibreOffice mock)
-node test/run-smoke.mjs      # 7 种格式全链路(Windows 需 WPS/Office + PP-StructureV3;Linux 需 LibreOffice)
+npm test                       # 单元测试(后端分流、LibreOffice mock)
+node test/run-smoke.mjs        # 7 格式冒烟(Windows 需 WPS/Office;Linux 需 LibreOffice)
+node test/run-smoke.mjs --all --reference   # 全量 8 格式(含扫描件 OCR),并把参考输出写入 test/fixtures/final-out/
 ```
 
 ## 已知问题
