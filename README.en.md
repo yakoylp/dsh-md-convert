@@ -25,6 +25,7 @@ Convert Office documents and PDFs (including scanned ones) to Markdown with **st
 - **Node.js ≥ 18**
 - Legacy formats (`.doc/.xls/.ppt`): on **Windows** require **WPS Office** or **Microsoft Office** (COM auto-detected); on **Linux/macOS** require **LibreOffice** (`apt install libreoffice`; auto-detects `soffice`)
 - Scanned-PDF OCR always uses Baidu **PP-StructureV3** (CPU-only, no GPU needed); on headless Linux servers install CJK fonts (`fonts-noto-cjk`)
+- **Local models**: OCR models are downloaded once to the local cache (`~/.paddlex/official_models/`, a few hundred MB) via `dsh-md-convert deps`; **after that, runs are fully offline** — no network checks, OCR works without internet
 
 **Auto-install of dependencies (default on)**: on first scanned-PDF conversion the plugin
 detects Python and the OCR packages (`paddlepaddle` `paddleocr` `paddlex[ocr]` `pypdfium2`);
@@ -77,9 +78,9 @@ dsh-md-convert scan.pdf -o ./md
 # Pin a Python interpreter (multi-Python setups)
 dsh-md-convert scan.pdf -o ./md --ocr-python "C:\path\to\python.exe"
 
-# Check / install OCR dependencies
+# Check / install OCR deps and models
 dsh-md-convert check        # status only, no install
-dsh-md-convert deps         # check and auto-install missing deps
+dsh-md-convert deps         # install missing deps and pre-download OCR models (one network run; offline afterwards)
 ```
 
 Full options: `dsh-md-convert --help`.

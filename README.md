@@ -25,6 +25,7 @@
 - **Node.js ≥ 18**
 - 老格式转换(`.doc/.xls/.ppt`):Windows 需本机装有 **WPS Office** 或 **Microsoft Office**(COM 自动探测);Linux/macOS 需 **LibreOffice**(`apt install libreoffice`,自动探测 `soffice`)
 - 扫描件 OCR **固定使用百度 PP-StructureV3**(CPU 即可,无需 GPU);Linux 无头服务器建议安装中文字体 `fonts-noto-cjk`
+- **模型本地化**:OCR 模型首次经 `dsh-md-convert deps` 联网下载到本地缓存(`~/.paddlex/official_models/`,约数百 MB);**之后运行完全离线**,不做任何网络检查,断网可正常 OCR
 
 **依赖自动安装(默认开启)**:首次转换扫描件时,插件自动检测 Python 与 OCR 依赖
 (`paddlepaddle` `paddleocr` `paddlex[ocr]` `pypdfium2`),**有则直接使用,缺则自动 `pip install`**,
@@ -76,9 +77,9 @@ dsh-md-convert scan.pdf -o ./md
 # 指定 Python 解释器(多 Python 环境时)
 dsh-md-convert scan.pdf -o ./md --ocr-python "C:\path\to\python.exe"
 
-# 检查 / 安装 OCR 依赖
+# 检查 / 安装 OCR 依赖与模型
 dsh-md-convert check        # 只检查状态,不安装
-dsh-md-convert deps         # 检查并自动安装缺失依赖
+dsh-md-convert deps         # 安装缺失依赖并预下载 OCR 模型到本地(需联网一次,之后离线可用)
 ```
 
 完整选项见 `dsh-md-convert --help`。

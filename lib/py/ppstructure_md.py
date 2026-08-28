@@ -18,6 +18,10 @@ dsh-md-convert — PP-StructureV3 OCR 封装
 依赖(一次性安装,CPU 即可):
   pip install paddlepaddle paddleocr "paddlex[ocr]" pypdfium2
 
+模型(安装时下载到本地 ~/.paddlex/official_models/,之后完全离线运行):
+  运行 `dsh-md-convert deps` 联网预下载;模型缓存齐全后本脚本不再做任何
+  网络检查(设置了 PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK=true),断网可用。
+
 已知坑(已验证,2025-08):
   - paddlepaddle 3.3.x 的 oneDNN 与 PIR 静态图不兼容(ConvertPirAttribute2RuntimeAttribute),
     必须 FLAGS_use_mkldnn=0 + enable_mkldnn=False
@@ -31,11 +35,31 @@ import sys
 import tempfile
 from pathlib import Path
 
+# 离线优先:跳过 PaddleX 对模型托管源的连通性检查(模型已本地缓存时零网络)。
+# 模型缺失时 paddlex 仍会尝试下载(此时需要网络);预下载请用 `dsh-md-convert deps`。
+os.environ.setdefault("PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK", "true")
+
 os.environ.setdefault("FLAGS_use_mkldnn", "0")  # 规避 paddle 3.3 oneDNN bug
+
+# 渲染/输入图片的最大边长(像素)。超出按比例缩小——PP-OCRv5 在 ~72-144dpi 精度足够,
+# 大图(A3 扫描件 scale=2 可达 2382px)直接送入检测器会让 CPU 推理慢一个量级。
+MAX_SIDE = 1600
+
+
+def _cap_max_side(pil):
+    """将图片最长边限制为 MAX_SIDE,等比缩放;未超限则原样返回"""
+    w, h = pil.size
+    longest = max(w, h)
+    if longest <= MAX_SIDE:
+        return pil
+    ratio = MAX_SIDE / float(longest)
+    from PIL import Image
+
+    return pil.resize((max(1, int(w * ratio)), max(1, int(h * ratio))), Image.LANCZOS)
 
 
 def render_pdf(pdf_path, scale=2.0):
-    """pypdfium2 渲染 PDF 为 RGB 图片数组"""
+    """pypdfium2 渲染 PDF 为 RGB 图片数组(超出 MAX_SIDE 自动缩小)"""
     import pypdfium2 as pdfium
 
     pdf = pdfium.PdfDocument(str(pdf_path))
@@ -45,7 +69,7 @@ def render_pdf(pdf_path, scale=2.0):
         pil = bitmap.to_pil()
         if pil.mode != "RGB":
             pil = pil.convert("RGB")
-        pages.append(pil)
+        pages.append(_cap_max_side(pil))
     return pages
 
 
@@ -114,11 +138,16 @@ def main():
         return 1
 
     ext = Path(src).suffix.lower()
+    # 精简管线:默认关闭公式/印章/图表识别(普通扫描件用不到,且公式模型 701MB、
+    # 印章/图表检测在 CPU 上极慢),保留版面分析、表格识别与 OCR——速度提升约 15~25 倍。
     engine = PPStructureV3(
         lang="ch",
         use_doc_orientation_classify=False,
         use_doc_unwarping=False,
         use_textline_orientation=False,
+        use_formula_recognition=False,
+        use_seal_recognition=False,
+        use_chart_recognition=False,
         enable_mkldnn=False,
     )
 
@@ -133,7 +162,7 @@ def main():
                 return 1
         else:
             from PIL import Image
-            images = [Image.open(src).convert("RGB")]
+            images = [_cap_max_side(Image.open(src).convert("RGB"))]
 
         # PaddleX 对 PIL 对象支持不可靠,保存为临时 PNG 再传文件路径
         tmpdir = tempfile.mkdtemp(prefix="dsh-ppstructure-")
