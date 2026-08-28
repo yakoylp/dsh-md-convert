@@ -40,11 +40,7 @@ pip install paddlepaddle paddleocr "paddlex[ocr]" pypdfium2
 ### 作为 DSH 插件
 
 ```sh
-# 方式一:从 GitHub 安装(推荐)
 dsh plugin --profile web add github:yakoylp/dsh-md-convert
-
-# 方式二:发布到 npm 后
-dsh plugin --profile web add dsh-md-convert
 ```
 
 安装后重启 `dsh web`,agent 获得 `md_convert` 工具。CLI 命令 `dsh-md-convert` 随 profile 的 `node_modules/.bin` 暴露。
