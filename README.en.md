@@ -12,8 +12,8 @@ Convert Office documents and PDFs (including scanned ones) to Markdown with **st
 | Input | Pipeline | Notes |
 | --- | --- | --- |
 | `.docx` / `.xlsx` / `.pptx` | MarkItDown direct | Headings/lists/tables/paragraphs kept as Markdown |
-| `.pdf` (with text layer) | MarkItDown direct | Falls back to **PP-StructureV3** automatically when the text layer is empty |
-| `.pdf` (scanned) | **PP-StructureV3** (layout analysis + OCR) → Markdown | Headings/body/tables/formulas/stamps assembled in reading order, CPU-only |
+| `.pdf` (with text layer) | MarkItDown direct | Falls back to **routing OCR** automatically when the text layer is empty |
+| `.pdf` (scanned) | **Routing OCR** (PP-DocLayout-L layout + RapidOCR text / SLANet tables / FormulaNet formulas) | Headings/body/tables/formulas/stamps, CPU-only, lightweight models |
 | `.doc` / `.xls` / `.ppt` | WPS/Office COM (Windows) or LibreOffice (other platforms) re-save to modern format → MarkItDown | Backend auto-detected, configurable |
 | `.html/.csv/.json/.xml/.ipynb/.md/.txt/...` | MarkItDown / direct read | Everything MarkItDown supports |
 
@@ -24,21 +24,21 @@ Convert Office documents and PDFs (including scanned ones) to Markdown with **st
 
 - **Node.js ≥ 18**
 - Legacy formats (`.doc/.xls/.ppt`): on **Windows** require **WPS Office** or **Microsoft Office** (COM auto-detected); on **Linux/macOS** require **LibreOffice** (`apt install libreoffice`; auto-detects `soffice`)
-- Scanned-PDF OCR always uses Baidu **PP-StructureV3** (CPU-only, no GPU needed); on headless Linux servers install CJK fonts (`fonts-noto-cjk`)
-- **Default pipeline**: document orientation correction / layout analysis / table recognition / text OCR; formula, seal and chart recognition are **off by default** — enable with `--ocr-formula` / `--ocr-seal` / `--ocr-chart` (pre-download models first: `dsh-md-convert deps --ocr-formula`)
+- **Scanned-PDF OCR is CPU-first, lightweight-model-first, cost/performance-oriented**: a modular routing pipeline — `PP-DocLayout-L` layout analysis (lightweight) routes each region: **text → RapidOCR (PP-OCRv6 ONNX, fastest)**, tables → SLANet + RT-DETR, **formulas → FormulaNet-Plus-S (lightweight)**; heading levels come from the layout model. Quality is reasonably guaranteed, but speed takes priority (complex layouts / tiny text may be incomplete)
+- On headless Linux servers install CJK fonts (`fonts-noto-cjk`)
 - **Local models**: OCR models are downloaded once to the local cache (`~/.paddlex/official_models/`, a few hundred MB) via `dsh-md-convert deps`; **after that, runs are fully offline** — no network checks, OCR works without internet
 
 **Auto-install of dependencies (default on)**: on first scanned-PDF conversion the plugin
-detects Python and the OCR packages (`paddlepaddle` `paddleocr` `paddlex[ocr]` `pypdfium2`);
+detects Python and the OCR packages (`paddlepaddle` `paddleocr` `paddlex[ocr]` `pypdfium2` `rapidocr` `onnxruntime`);
 if present it uses them, if missing it runs `pip install` automatically. Disable with
 `--no-auto-install-deps`, or pre-install manually:
 
 ```sh
-pip install paddlepaddle paddleocr "paddlex[ocr]" pypdfium2
+pip install paddlepaddle paddleocr "paddlex[ocr]" pypdfium2 rapidocr onnxruntime
 ```
 
-> PP-StructureV3 = PP-OCRv5 text recognition + layout analysis + table structure recognition (SLANet++),
-> producing structured Markdown (`##` headings, paragraphs, pipe tables, `$$` formulas, stamp comments).
+> Routing OCR = PP-DocLayout-L layout (threshold 0.3) + region routing: text→RapidOCR,
+> tables→SLANet structure + RT-DETR cells + OCR fill, formulas→FormulaNet-S, stamps→comments.
 
 ## Installation
 
@@ -73,19 +73,11 @@ dsh-md-convert old.doc old.xls old.ppt -o ./md
 # Force a specific legacy backend
 dsh-md-convert old.doc -o ./md --legacy-backend wps
 
-# Scanned PDF: automatic PP-StructureV3 (deps auto-installed if missing)
+# Scanned PDF: automatic routing OCR (deps auto-installed if missing)
 dsh-md-convert scan.pdf -o ./md
 
 # Pin a Python interpreter (multi-Python setups)
 dsh-md-convert scan.pdf -o ./md --ocr-python "C:\path\to\python.exe"
-
-# Optional OCR modules (off by default; pre-download models first: dsh-md-convert deps --ocr-formula)
-dsh-md-convert formula-doc.pdf -o ./md --ocr-formula   # formula recognition
-dsh-md-convert doc.pdf -o ./md --ocr-seal              # seal recognition
-dsh-md-convert chart-doc.pdf -o ./md --ocr-chart       # chart recognition
-
-# Fast mode (PP-OCRv5 mobile models, ~40% faster, slightly lower accuracy; pre-download: dsh-md-convert deps --ocr-fast)
-dsh-md-convert scan.pdf -o ./md --ocr-fast
 
 # Check / install OCR deps and models
 dsh-md-convert check        # status only, no install
@@ -105,7 +97,7 @@ Every failure carries a **stable error code** so callers (CLI / agent tool / SDK
 | `E_MARKITDOWN` | MarkItDown conversion failed | Usually corrupt/encrypted file; retry once |
 | `E_LEGACY_CONVERT` | Legacy re-save failed (COM/LibreOffice) | WPS/Office on Windows, LibreOffice elsewhere; built-in retry on busy |
 | `E_OCR_DEPS` | OCR deps missing (install failed/disabled) | Run `dsh-md-convert deps` |
-| `E_OCR_RUN` | PP-StructureV3 execution failed | Retry, or lower `--ocr-scale` |
+| `E_OCR_RUN` | Routing OCR execution failed | Retry, or lower `--ocr-scale` |
 | `E_OCR_EMPTY` | Scanned page yielded no text | Check scan quality |
 | `E_OUTPUT` | Output write failed | Check outDir permission/disk |
 | `E_UNKNOWN` | Any other error | Read the error message |
@@ -142,10 +134,6 @@ Plugin config (`cordis.patch.yml`):
         autoInstallDeps: true # auto pip-install missing OCR deps
         ocr:
           python: ""          # Python interpreter (empty = auto-detect)
-          formula: false      # enable formula recognition (default off; pre-download: dsh-md-convert deps --ocr-formula)
-          seal: false         # enable seal recognition (default off)
-          chart: false        # enable chart recognition (default off)
-          fast: false         # fast mode: PP-OCRv5 mobile models (~40% faster, slightly lower accuracy)
         legacy:
           backend: "auto"     # auto | wps | office | libreoffice (auto: COM on Windows, LibreOffice elsewhere)
 ```
@@ -179,13 +167,14 @@ node test/run-smoke.mjs --all --reference   # all 8 formats (incl. scanned OCR) 
 
 - **paddlepaddle ≥3.3 has a oneDNN/PIR static-graph incompatibility** that crashes inference; the plugin
   disables it automatically (`FLAGS_use_mkldnn=0` + `enable_mkldnn=False`), no manual action needed.
-- Scanned-PDF OCR quality depends on page clarity; for complex table/formula pages use a higher `--ocr-scale` (e.g. 3).
+- Scanned-PDF OCR quality depends on page clarity; for complex layouts / tiny text raise `--ocr-scale` (e.g. 3) — accuracy improves, time increases.
 
 ## Limitations
 
 - Corrupt/encrypted files and some complex layouts may fail (with a clear error)
 - Formats MarkItDown does not support (e.g. `.pages/.key`) are reported explicitly as unsupported
-- PP-StructureV3 downloads its models on first run (a few hundred MB to `~/.paddlex/`); later loads are fast
+- **Speed-first trade-offs**: routing OCR uses lightweight models (layout PP-DocLayout-L, text RapidOCR, formula FormulaNet-S); quality is reasonably guaranteed, but complex tables (multi-level merges / slanted headers), complex multi-column layouts, and very small fonts may be incomplete
+- OCR models need a one-time network download (a few hundred MB to `~/.paddlex/`); afterwards fully offline, fast loads
 
 ## License
 

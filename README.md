@@ -12,8 +12,8 @@
 | 输入 | 链路 | 说明 |
 | --- | --- | --- |
 | `.docx` / `.xlsx` / `.pptx` | MarkItDown 直转 | 标题/列表/表格/段落保留为 Markdown |
-| `.pdf`(含文字层) | MarkItDown 直转 | 文字层为空时**自动回退 PP-StructureV3** |
-| `.pdf`(扫描件) | **PP-StructureV3**(版面分析 + OCR)→ Markdown | 标题/正文/表格/公式/印章按阅读顺序拼装,纯 CPU |
+| `.pdf`(含文字层) | MarkItDown 直转 | 文字层为空时**自动回退路由 OCR** |
+| `.pdf`(扫描件) | **路由 OCR**(PP-DocLayout-L 版面 + RapidOCR 文字 / SLANet 表格 / FormulaNet 公式) | 标题/正文/表格/公式/印章,纯 CPU、轻量模型 |
 | `.doc` / `.xls` / `.ppt` | WPS/Office COM(Windows)或 LibreOffice(其余平台)另存为新格式 → MarkItDown | 后端自动探测,可配置 |
 | `.html/.csv/.json/.xml/.ipynb/.md/.txt/...` | MarkItDown / 直接读取 | MarkItDown 支持的全部格式 |
 
@@ -24,20 +24,20 @@
 
 - **Node.js ≥ 18**
 - 老格式转换(`.doc/.xls/.ppt`):Windows 需本机装有 **WPS Office** 或 **Microsoft Office**(COM 自动探测);Linux/macOS 需 **LibreOffice**(`apt install libreoffice`,自动探测 `soffice`)
-- 扫描件 OCR **固定使用百度 PP-StructureV3**(CPU 即可,无需 GPU);Linux 无头服务器建议安装中文字体 `fonts-noto-cjk`
-- **默认管线**:文档方向矫正/版面分析/表格识别/文本 OCR;公式、印章、图表识别**默认关闭**,可用 `--ocr-formula` / `--ocr-seal` / `--ocr-chart` 开启(开启前先 `dsh-md-convert deps --ocr-formula` 预下载对应模型)
+- **扫描件 OCR 以 CPU 为主、轻量模型优先、性价比优先**:模块化路由流水线——`PP-DocLayout-L` 版面分析(轻量)按区域路由,**文字走 RapidOCR(PP-OCRv6 ONNX,最快)**,表格走 SLANet+RT-DETR,**公式走 FormulaNet-Plus-S(轻量)**;标题层级由版面模型识别。质量有基本保证,但为效率做了取舍(如复杂版面/超小字号可能识别不全)
+- Linux 无头服务器建议安装中文字体 `fonts-noto-cjk`
 - **模型本地化**:OCR 模型首次经 `dsh-md-convert deps` 联网下载到本地缓存(`~/.paddlex/official_models/`,约数百 MB);**之后运行完全离线**,不做任何网络检查,断网可正常 OCR
 
 **依赖自动安装(默认开启)**:首次转换扫描件时,插件自动检测 Python 与 OCR 依赖
-(`paddlepaddle` `paddleocr` `paddlex[ocr]` `pypdfium2`),**有则直接使用,缺则自动 `pip install`**,
-无需手动操作。可用 `--no-auto-install-deps` 关闭,或手动预装:
+(`paddlepaddle` `paddleocr` `paddlex[ocr]` `pypdfium2` `rapidocr` `onnxruntime`),
+**有则直接使用,缺则自动 `pip install`**,无需手动操作。可用 `--no-auto-install-deps` 关闭,或手动预装:
 
 ```sh
-pip install paddlepaddle paddleocr "paddlex[ocr]" pypdfium2
+pip install paddlepaddle paddleocr "paddlex[ocr]" pypdfium2 rapidocr onnxruntime
 ```
 
-> PP-StructureV3 = PP-OCRv5 文字识别 + 版面分析 + 表格结构识别(SLANet++),
-> 输出带结构的 Markdown(标题 `##`、段落、管道表格、公式 `$$`、印章注释)。
+> 路由 OCR = PP-DocLayout-L 版面分析(阈值 0.3)+ 区域路由:文字→RapidOCR、
+> 表格→SLANet 结构+RT-DETR 单元格+OCR 填格、公式→FormulaNet-S、印章→注释。
 
 ## 安装
 
@@ -72,19 +72,11 @@ dsh-md-convert old.doc old.xls old.ppt -o ./md
 # 强制指定老格式后端
 dsh-md-convert old.doc -o ./md --legacy-backend wps
 
-# 扫描件:自动走 PP-StructureV3(无需任何 OCR 参数;缺依赖自动安装)
+# 扫描件:自动走路由 OCR(无需任何 OCR 参数;缺依赖自动安装)
 dsh-md-convert scan.pdf -o ./md
 
 # 指定 Python 解释器(多 Python 环境时)
 dsh-md-convert scan.pdf -o ./md --ocr-python "C:\path\to\python.exe"
-
-# 可选 OCR 模块(默认关;开启前先 dsh-md-convert deps --ocr-formula 预下载模型)
-dsh-md-convert formula-doc.pdf -o ./md --ocr-formula   # 公式识别
-dsh-md-convert doc.pdf -o ./md --ocr-seal              # 印章识别
-dsh-md-convert chart-doc.pdf -o ./md --ocr-chart       # 图表识别
-
-# 快速模式(用 PP-OCRv5 mobile 模型,约快 40%,精度略降;模型需 dsh-md-convert deps --ocr-fast 预下载)
-dsh-md-convert scan.pdf -o ./md --ocr-fast
 
 # 检查 / 安装 OCR 依赖与模型
 dsh-md-convert check        # 只检查状态,不安装
@@ -104,7 +96,7 @@ dsh-md-convert deps         # 安装缺失依赖并预下载 OCR 模型到本地
 | `E_MARKITDOWN` | MarkItDown 转换失败 | 多为文件损坏/加密,可重试 |
 | `E_LEGACY_CONVERT` | 老格式另存失败(COM/LibreOffice) | Windows 需 WPS/Office、其余平台需 LibreOffice;已内置自动重试 |
 | `E_OCR_DEPS` | 缺 OCR 依赖(自动安装失败/已禁用) | 执行 `dsh-md-convert deps` |
-| `E_OCR_RUN` | PP-StructureV3 执行失败 | 重试或降低 `--ocr-scale` |
+| `E_OCR_RUN` | 路由 OCR 执行失败 | 重试或降低 `--ocr-scale` |
 | `E_OCR_EMPTY` | 扫描件未识别出内容 | 检查扫描质量 |
 | `E_OUTPUT` | 输出写入失败 | 检查 outDir 权限/磁盘 |
 | `E_UNKNOWN` | 其他错误 | 查看 error 消息 |
@@ -140,11 +132,7 @@ md_convert({ file: "报告.docx", outDir: "./md" })
         ocrScale: 2           # PDF 渲染倍率
         autoInstallDeps: true # 缺 OCR 依赖时自动 pip 安装
         ocr:
-          python: ""          # Python 解释器(运行 PP-StructureV3;空则自动探测)
-          formula: false      # 开启公式识别(默认关;需 dsh-md-convert deps --ocr-formula 预下载模型)
-          seal: false         # 开启印章识别(默认关)
-          chart: false        # 开启图表识别(默认关)
-          fast: false         # 快速模式:PP-OCRv5 mobile 模型(更快约 40%,精度略降)
+          python: ""          # Python 解释器(运行 OCR 流水线;空则自动探测)
         legacy:
           backend: "auto"     # auto | wps | office | libreoffice(auto:Windows 用 COM,其余平台用 LibreOffice)
 ```
@@ -178,13 +166,15 @@ node test/run-smoke.mjs --all --reference   # 全量 8 格式(含扫描件 OCR),
 
 - **paddlepaddle ≥3.3 的 oneDNN 与 PIR 静态图不兼容**会导致推理崩溃,插件已自动禁用
   (`FLAGS_use_mkldnn=0` + `enable_mkldnn=False`),无需手动处理。
-- 扫描件 OCR 质量取决于版面清晰度;复杂表格/公式页面建议更高 `--ocr-scale`(如 3)。
+- 扫描件 OCR 质量取决于版面清晰度;复杂版面/超小字号页面可适当提高 `--ocr-scale`(如 3)换取精度,耗时相应增加。
 
 ## 限制
 
 - 加密/损坏文件、部分复杂版面可能转换失败(会给出明确错误)
 - MarkItDown 不支持的格式(如 `.pages/.key` 等)会明确报"不支持"
-- PP-StructureV3 首次运行会下载模型(约数百 MB 到 `~/.paddlex/`),之后秒级加载
+- **效率优先的取舍**:路由 OCR 选用轻量模型(版面 PP-DocLayout-L、文字 RapidOCR、公式 FormulaNet-S),速度优先,
+  质量有基本保证;复杂表格(多层合并/斜线表头)、复杂多栏版面、超小字号可能存在识别不完整
+- OCR 模型首次需联网预下载(约数百 MB 到 `~/.paddlex/`),之后完全离线、秒级加载
 
 ## 许可证
 
