@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.5.5] — 工具返回值校验修复
+
+### `chain` 字段类型不匹配(工具结果被框架拦截)
+
+`output.schema` 把 `chain` 声明为数组(`{ type: "array", items: { type: "string" } }`),而 `convert.js` 实际返回的是**字符串**(如 `"legacy(wps) → markitdown"`、`"路由OCR"`)。转换成功后,DSH 框架按 schema 校验返回值,报 `"value.chain" must be an array`,工具结果传不回对话。
+
+- schema 改为 `chain: { type: "string" }`,与 `convert.js` / `cli.js` / README 示例(字符串写法)一致。
+- 渲染回调去掉 `.length` / `.join(" → ")`,直接拼接字符串。
+- 新增回归测试:校验 `execute()` 的返回值(成功/失败两种形状)必须通过声明的 output schema——schema 与返回值不一致会在测试里直接红,而不是在 DSH 运行时报 `"value.chain" must be an array`。
+
+### 测试
+
+- `npm test` 9/9 通过(含新增返回值校验回归)。
+
+---
+
 ## [0.5.4] — 修复与健壮性强化
 
 ### 路径解析彻底修复（重要）

@@ -102,3 +102,62 @@ test("execute preserves an absolute file path regardless of session cwd", async 
 	assert.equal(r.code, "E_FILE_NOT_FOUND");
 	assert.equal(r.file, absFile);
 });
+
+/**
+ * Validate a tool-returned value against the declared output schema, the way
+ * the DSH runtime does after execute() — a schema/value mismatch here is
+ * exactly the kind of bug that blocks the tool result from reaching the
+ * conversation ("value.chain must be an array").
+ */
+function validateValue(value, schema, path = "$") {
+	if (schema === undefined || schema === null) return [];
+	if (schema.oneOf) {
+		return schema.oneOf.some(branch => validateValue(value, branch, path).length === 0)
+			? []
+			: [`${path} must match one of oneOf`];
+	}
+	switch (schema.type) {
+		case "object": {
+			if (typeof value !== "object" || value === null || Array.isArray(value)) {
+				return [`${path} must be object`];
+			}
+			const violations = [];
+			for (const key of schema.required ?? []) {
+				if (!Object.hasOwn(value, key)) violations.push(`${path}.${key} is required`);
+			}
+			if (schema.additionalProperties === false) {
+				for (const key of Object.keys(value)) {
+					if (!(key in (schema.properties ?? {}))) violations.push(`${path}.${key} is not allowed`);
+				}
+			}
+			for (const [key, sub] of Object.entries(schema.properties ?? {})) {
+				if (Object.hasOwn(value, key)) violations.push(...validateValue(value[key], sub, `${path}.${key}`));
+			}
+			return violations;
+		}
+		case "array": {
+			if (!Array.isArray(value)) return [`${path} must be array`];
+			const violations = [];
+			for (let index = 0; index < value.length; index++) {
+				violations.push(...validateValue(value[index], schema.items, `${path}[${index}]`));
+			}
+			return violations;
+		}
+		case "string": return typeof value === "string" ? [] : [`${path} must be string`];
+		case "boolean": return typeof value === "boolean" ? [] : [`${path} must be boolean`];
+		case "number":
+		case "integer": return typeof value === "number" ? [] : [`${path} must be ${schema.type}`];
+		default: return [];
+	}
+}
+
+test("execute() return values satisfy the declared output schema", async () => {
+	const regs = await boot({});
+	const schema = regs[0].output.schema;
+	// chain 是字符串(如 "legacy(wps) → markitdown"),schema 必须与之匹配,
+	// 否则 DSH 会以 "value.chain must be an array" 拦下工具结果。
+	const success = { ok: true, output: "./md/report.md", chain: "legacy(wps) → markitdown", warnings: [] };
+	const failure = { ok: false, code: "E_FILE_NOT_FOUND", file: "x.doc", error: "missing" };
+	assert.deepEqual(validateValue(success, schema), []);
+	assert.deepEqual(validateValue(failure, schema), []);
+});
