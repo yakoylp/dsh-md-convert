@@ -4,7 +4,7 @@
  *
  * 用法:
  *   node test/run-smoke.mjs                # 7 个非扫描样例
- *   node test/run-smoke.mjs --all          # 额外包含 scanned.pdf(走 PP-StructureV3 OCR)
+ *   node test/run-smoke.mjs --all          # 额外包含 scanned.pdf(走路由 OCR)
  *   node test/run-smoke.mjs --force-ocr    # 全部 PDF 强制走 OCR
  *   node test/run-smoke.mjs --reference    # 另将完整参考集写入 fixtures/final-out/ 并提交
  */

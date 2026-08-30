@@ -52,5 +52,5 @@ md_convert({ "file": "scan.pdf", "forceOcr": true, "outDir": "./md" })
 
 - **结构化而非视觉**:字体/字号/颜色/缩进不保留,主动告知用户
 - 扫描件质量取决于清晰度;复杂表格/多栏/超小字号可能识别不全
-- 首次使用自动装依赖(缺则 `pip install`)、联网下载 OCR 模型(数百 MB,之后完全离线);模型未就绪时提示用户跑 `dsh-md-convert deps`
+- 首次使用自动装依赖(缺则 `pip install`);OCR 模型需预先联网下载一次(`dsh-md-convert deps`,数百 MB,之后完全离线),模型未就绪时工具会返回 `E_OCR_DEPS` 并提示先跑该命令
 - 源文件只读,绝不修改;临时文件自动清理

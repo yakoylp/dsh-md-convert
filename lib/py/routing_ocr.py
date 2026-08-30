@@ -164,6 +164,8 @@ class RoutingOCR:
                 continue
             xs = [float(p[0]) for p in box]
             ys = [float(p[1]) for p in box]
+            if not xs or not ys:
+                continue
             cx, cy = sum(xs) / len(xs) + offset_x, sum(ys) / len(ys) + offset_y  # 换算回页面坐标
             if rx1 <= cx <= rx2 and ry1 <= cy <= ry2:
                 kept.append(str(line).strip())
@@ -213,6 +215,8 @@ class RoutingOCR:
                 continue
             xs = [float(p[0]) for p in box]
             ys = [float(p[1]) for p in box]
+            if not xs or not ys:
+                continue
             cx, cy = sum(xs) / len(xs), sum(ys) / len(ys)
             for i, (x1, y1, x2, y2) in enumerate(cell_xy):
                 if x1 <= cx <= x2 and y1 <= cy <= y2:

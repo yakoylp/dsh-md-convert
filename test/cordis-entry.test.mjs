@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { join as pathJoin, parse as pathParse, resolve as pathResolve } from "node:path";
 import { Context } from "@deepseek-ai/cordis";
 import * as entry from "../lib/index.js";
 
@@ -76,4 +77,28 @@ test("plugin activates when the loader passes no config", async () => {
 	const regs = await boot(undefined);
 	assert.equal(regs.length, 1);
 	assert.equal(regs[0].name, "md_convert");
+});
+
+test("execute resolves relative file against session cwd, not process.cwd()", async () => {
+	const regs = await boot({});
+	const def = regs[0];
+	// 会话工作区与进程 cwd 不同:修复前会用 process.cwd() 解析相对路径导致 E_FILE_NOT_FOUND 指向错误目录。
+	const sessionCwd = pathResolve(process.cwd(), "fake-workspace");
+	const exec = { agent: { session: { header: { cwd: sessionCwd } } } };
+	const r = await def.execute({ file: "测试.doc" }, exec);
+	assert.equal(r.ok, false);
+	assert.equal(r.code, "E_FILE_NOT_FOUND");
+	assert.equal(r.file, pathJoin(sessionCwd, "测试.doc"));
+});
+
+test("execute preserves an absolute file path regardless of session cwd", async () => {
+	const regs = await boot({});
+	const def = regs[0];
+	// 带盘符/根的绝对路径应原样保留,不被拼接到 cwd 之后(回归: path.join 会把盘符拼坏)。
+	const absFile = pathJoin(pathParse(process.cwd()).root, "办公室工作", "测试.doc");
+	const exec = { agent: { session: { header: { cwd: pathResolve(process.cwd(), "elsewhere") } } } };
+	const r = await def.execute({ file: absFile }, exec);
+	assert.equal(r.ok, false);
+	assert.equal(r.code, "E_FILE_NOT_FOUND");
+	assert.equal(r.file, absFile);
 });
