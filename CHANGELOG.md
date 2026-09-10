@@ -37,7 +37,7 @@
 
 ### 路径解析彻底修复（重要）
 
-`md_convert` 工具对**相对路径**与 **Windows 绝对路径**的解析此前均有误，导致所有正常调用都报 `E_FILE_NOT_FOUND`，且错误路径被拼到 DSH 依赖目录下（如 `C:\…\dependencies\dsh\E:\办公室工作\…`）。现彻底修复：
+`md_convert` 工具对**相对路径**与 **Windows 绝对路径**的解析此前均有误，导致所有正常调用都报 `E_FILE_NOT_FOUND`，且错误路径被拼到 DSH 依赖目录下（如 `C:\…\dependencies\dsh\E:\<工作目录>\…`）。现彻底修复：
 
 - 相对路径基准从宿主进程 `process.cwd()` 改为**会话工作区** `exec.agent.session.header.cwd`（与官方 `dsh-tool-fs` / `dsh-tool-bash` 一致）——桌面部署下 `process.cwd()` 是 DSH 依赖目录、不是工作区。
 - 绝对路径（含盘符 `E:\…`）改用 `path.resolve` 处理，原样保留、不再被拼接破坏。
