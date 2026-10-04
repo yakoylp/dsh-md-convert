@@ -135,7 +135,32 @@ md_convert({ file: "报告.docx", outDir: "./md" })
           python: ""          # Python 解释器(运行 OCR 流水线;空则自动探测)
         legacy:
           backend: "auto"     # auto | wps | office | libreoffice(auto:Windows 用 COM,其余平台用 LibreOffice)
+        markitdown:
+          mode: "worker"      # worker(默认,子进程执行)| in-process(仅诊断;DSH 宿主内会失败)
+          node: ""            # 运行 worker 的解释器;空则自动探测
+          timeoutMs: 0        # worker 超时毫秒;0 = 不超时
 ```
+
+## markitdown 执行方式(默认子进程)
+
+`.docx/.xlsx/.pptx` 与 PDF 文字层由 MarkItDown 直转,这一步**默认在子进程中执行**:
+
+- 子进程用 `process.execPath` 启动;在 Electron 宿主(官方桌面版)里自动追加
+  `ELECTRON_RUN_AS_NODE=1`,让同一二进制以纯 Node 方式运行 worker
+- 可用 `markitdown.node` 或环境变量 `DSH_MD_CONVERT_NODE` 指定解释器
+- worker 把结果写入临时 JSON 文件再由父进程读取,因此 markitdown/jsdom 的偶发
+  stdout 输出不会污染结果;失败统一映射为 `E_MARKITDOWN`(消息内带退出码与 stderr 尾部)
+
+**为什么默认子进程**:DSH 宿主会给 profile 内模块安装「插件依赖路由层」,它把
+`pkg/` 形式的模块请求剥成包名后调用 `require.resolve.paths(包名)`;若剥出的名字正好是
+Node 内置模块名,该调用返回 `null`,随后的 `for...of` 抛 `TypeError`。MarkItDown 顶层依赖
+jsdom,而 jsdom → whatwg-url → tr46 链上有一句 `require("punycode/")`(为取 npm 版
+punycode,而非已废弃的内置模块),正好命中该缺陷,导致**在宿主进程内加载 MarkItDown 必然失败**。
+独立子进程没有这层路由,按 Node 原生规则解析。副作用是好的:jsdom/sharp 等重依赖的加载
+与内存开销不再留在长驻宿主进程里。
+
+`mode: "in-process"` 保留作诊断与「无法 spawn 子进程」的环境的逃生口;在 DSH 0.2.0-rc.2
+宿主内它仍会失败,不要用来规避上述缺陷。
 
 ## 老格式转换后端
 
@@ -166,6 +191,11 @@ node test/run-smoke.mjs --all --reference   # 全量 8 格式(含扫描件 OCR),
 
 - **paddlepaddle ≥3.3 的 oneDNN 与 PIR 静态图不兼容**会导致推理崩溃,插件已自动禁用
   (`FLAGS_use_mkldnn=0` + `enable_mkldnn=False`),无需手动处理。
+- **DSH 宿主插件依赖路由层缺陷(影响 dsh 0.2.0-rc.2)**:宿主解析 profile 内模块的
+  `pkg/` 请求时会剥成包名再调 `require.resolve.paths()`,剥出的名字若是 Node 内置模块名
+  (如 `require("punycode/")` → `punycode`)则返回 `null` 并抛 `TypeError`。插件已通过
+  「markitdown 走子进程」规避(见上文);同源缺陷会影响**任何**依赖树里含 jsdom
+  (→ whatwg-url → tr46)的插件,值得向 DSH 侧反馈。
 - 扫描件 OCR 质量取决于版面清晰度;复杂版面/超小字号页面可适当提高 `--ocr-scale`(如 3)换取精度,耗时相应增加。
 
 ## 限制

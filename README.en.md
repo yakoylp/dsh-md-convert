@@ -136,7 +136,36 @@ Plugin config (`cordis.patch.yml`):
           python: ""          # Python interpreter (empty = auto-detect)
         legacy:
           backend: "auto"     # auto | wps | office | libreoffice (auto: COM on Windows, LibreOffice elsewhere)
+        markitdown:
+          mode: "worker"      # worker (default, subprocess) | in-process (diagnostics only; fails inside a DSH host)
+          node: ""            # interpreter for the worker; empty = auto-detect
+          timeoutMs: 0        # worker timeout in ms; 0 = no timeout
 ```
+
+## How MarkItDown runs (subprocess by default)
+
+`.docx/.xlsx/.pptx` and text-layer PDFs are converted by MarkItDown, and that step **runs in a
+subprocess by default**:
+
+- The child is launched with `process.execPath`; inside an Electron host (the official desktop app)
+  `ELECTRON_RUN_AS_NODE=1` is added so the same binary runs the worker as plain Node
+- Pin an interpreter with `markitdown.node` or the `DSH_MD_CONVERT_NODE` environment variable
+- The worker writes its result to a temp JSON file that the parent reads, so stray stdout from
+  markitdown/jsdom cannot corrupt the result; every failure maps to `E_MARKITDOWN` (message carries
+  the exit code and the stderr tail)
+
+**Why a subprocess**: the DSH host installs a plugin dependency-routing layer for profile modules. It
+strips `pkg/`-style requests down to the package name and then calls `require.resolve.paths(name)`;
+when the stripped name happens to be a Node built-in, that call returns `null` and the following
+`for...of` throws a `TypeError`. MarkItDown depends on jsdom at the top level, and the chain
+jsdom → whatwg-url → tr46 contains `require("punycode/")` (used deliberately to get the npm
+punycode package rather than the deprecated built-in), which hits exactly that defect — so loading
+MarkItDown **inside the host process always fails**. A separate process has no such routing layer and
+resolves normally. Side benefit: jsdom/sharp and their memory cost no longer live in the long-running
+host process.
+
+`mode: "in-process"` remains as a diagnostic escape hatch, and for environments where spawning is
+impossible; inside a DSH 0.2.0-rc.2 host it still fails, so do not use it to work around the defect.
 
 ## Legacy format backends
 
@@ -167,6 +196,12 @@ node test/run-smoke.mjs --all --reference   # all 8 formats (incl. scanned OCR) 
 
 - **paddlepaddle ≥3.3 has a oneDNN/PIR static-graph incompatibility** that crashes inference; the plugin
   disables it automatically (`FLAGS_use_mkldnn=0` + `enable_mkldnn=False`), no manual action needed.
+- **DSH host routing defect (affects dsh 0.2.0-rc.2)**: when resolving a `pkg/` request from a profile
+  module, the host strips it to the package name and calls `require.resolve.paths()`; if that name is a
+  Node built-in (e.g. `require("punycode/")` → `punycode`) the call returns `null` and a `TypeError` is
+  thrown. This plugin sidesteps it by running MarkItDown in a subprocess (see above). The same defect
+  affects **any** plugin whose dependency tree contains jsdom (→ whatwg-url → tr46) and is worth
+  reporting upstream.
 - Scanned-PDF OCR quality depends on page clarity; for complex layouts / tiny text raise `--ocr-scale` (e.g. 3) — accuracy improves, time increases.
 
 ## Limitations

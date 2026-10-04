@@ -1,5 +1,57 @@
 # Changelog
 
+## [0.5.7] — 宿主内 MarkItDown 改由子进程执行
+
+### 修掉「宿主内 Office/PDF 转换必失败」的根因
+
+在 DSH 宿主进程内加载 `markitdown-node` 会抛:
+
+```
+TypeError: createRequire.resolve.paths is not a function or its return value is not iterable
+```
+
+根因不在本插件,而在宿主的插件依赖路由层:它把 `pkg/` 形式的 CJS 请求剥成包名后调用
+`require.resolve.paths(包名)`;若剥出的名字正好是 Node 内置模块名,该调用返回 `null`,
+随后的 `for...of` 抛 `TypeError`(`@deepseek-ai/dsh-app-boot` 的 `routeScoped`)。
+
+触发链是固定的:`markitdown-node` 顶层 require `jsdom` → `whatwg-url` → `tr46`,
+而 `tr46` 里有一句 `require("punycode/")`(带尾斜杠是社区惯例,用于取 npm 版 punycode
+而非已废弃的内置模块)。斜杠被剥掉后名字成了内置模块名 `punycode`,于是必然命中。
+
+因此**只要在宿主进程内加载 MarkItDown 就一定会失败**,与调用方式无关;独立 CLI 因没有该
+路由层而一直正常。
+
+### 变更
+
+- **新增 `lib/core/markitdown.js`**:markitdown 访问层,默认 `worker` 模式;
+  `in-process` 保留作诊断与无法 spawn 环境的逃生口
+- **新增 `lib/core/markitdown-worker.mjs`**:子进程侧加载 MarkItDown,结果写入临时 JSON
+  文件(不依赖 stdout,避免 markitdown/jsdom 的偶发输出污染结果)
+- **`lib/core/convert.js`**:`viaMarkItDown` 改为委托访问层,三条链路
+  (modern / 文字层 PDF / legacy → markitdown)全部走子进程
+- **`lib/index.js`**:新增可选配置 `markitdown.mode | node | timeoutMs` 的透传与文档
+- **`lib/cli.js` 行为不变**:CLI 输出格式、退出码、参数均未改动
+- 子进程解释器默认 `process.execPath`;Electron 宿主自动追加 `ELECTRON_RUN_AS_NODE=1`,
+  可用 `markitdown.node` 或 `DSH_MD_CONVERT_NODE` 覆盖
+- 失败统一映射为既有错误码 `E_MARKITDOWN`(消息含退出码与 stderr 尾部),
+  **不新增错误码**,公开错误码面保持不变
+- 附带收益:jsdom/sharp 等重依赖的加载与内存开销移出长驻宿主进程
+
+### 测试
+
+- 新增 `test/markitdown-worker.test.mjs`(9 项):worker 协议与失败上报、两种模式端到端、
+  解释器不可用与转换失败的 `E_MARKITDOWN` 映射、`convertFile` 默认走 worker
+- `npm test` 18/18 通过(含既有清理、cordis 入口、legacy 后端测试)
+- `node test/run-smoke.mjs` 7/7 通过(新链路含 `legacy(wps) → markitdown` 与 PDF 文字层)
+
+### 说明
+
+同源缺陷会影响**任何**依赖树里含 jsdom(→ whatwg-url → tr46)的插件,建议向 DSH 侧反馈;
+若宿主修复(例如在内置名判断上放行,或对 `resolve.paths()` 返回 `null` 做空数组兜底),
+本插件可切回 `mode: "in-process"`。
+
+---
+
 ## [0.5.6] — 清扫逻辑误删用户目录修复
 
 ### `sweepStale()` 不再删除非插件拥有的目录
