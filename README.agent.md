@@ -17,7 +17,7 @@
 ```jsonc
 // 单文件(推荐显式 outDir,避免与源文件混放)
 md_convert({ "file": "contract.pdf", "outDir": "./md" })
-// → { ok: true, output: "./md/contract.md", chain: "...", warnings?: [] }
+// → { ok: true, output: "./md/contract.md", chain: "...", cached: false, warnings?: [] }
 
 // 强制扫描件路径(一般不需要:文字层为空自动回退 OCR)
 md_convert({ "file": "scan.pdf", "forceOcr": true, "outDir": "./md" })
@@ -25,6 +25,7 @@ md_convert({ "file": "scan.pdf", "forceOcr": true, "outDir": "./md" })
 
 - `file`:绝对路径或相对工作区路径;`outDir` 缺省用会话工作区
 - 输出名 = 源文件名去扩展名 + `.md`;同名默认覆盖
+- **重复调用不重复转换**:同一文件内容未变时返回 `cached: true`(附 `cachedAt`),秒回,不会重新跑 OCR/markitdown;想知道是否真的重转过就看这个字段
 - 失败返回 `{ ok: false, code, file, error }`,`code` 是稳定错误码
 
 ## 错误码
@@ -54,4 +55,5 @@ md_convert({ "file": "scan.pdf", "forceOcr": true, "outDir": "./md" })
 - 扫描件质量取决于清晰度;复杂表格/多栏/超小字号可能识别不全
 - 首次使用自动装依赖(缺则 `pip install`);OCR 模型需预先联网下载一次(`dsh-md-convert deps`,数百 MB,之后完全离线),模型未就绪时工具会返回 `E_OCR_DEPS` 并提示先跑该命令
 - MarkItDown 那一步(Office / 文字层 PDF)在**子进程**中执行,因此不会把宿主拖住;子进程启动失败、超时或转换失败都返回 `E_MARKITDOWN`,消息里带退出码与 stderr 尾部,可直接据此判断是路径问题还是文档损坏
+- **转换结果有缓存**(默认 `$DSH_HOME/md-convert-cache`):同机的所有会话/agent 共享,内容没变就直接复用;文件改了、或 `forceOcr`/`ocrScale`/`legacy.backend`/插件版本变了会自动失效
 - 源文件只读,绝不修改;临时文件自动清理

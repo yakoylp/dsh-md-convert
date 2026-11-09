@@ -1,6 +1,6 @@
 {
   "name": "dsh-md-convert",
-  "version": "0.5.7",
+  "version": "0.6.0",
   "description": "Convert Office documents (.doc/.docx/.xls/.xlsx/.ppt/.pptx) and PDFs (incl. scanned, via local OCR) to structurally-formatted Markdown, powered by MarkItDown. CLI + dsh agent tool.",
   "type": "module",
   "license": "MIT",
@@ -31,6 +31,7 @@
     ".": {
       "default": "./lib/index.js"
     },
+    "./client": "./client.js",
     "./package.json": "./package.json"
   },
   "main": "lib/index.js",
@@ -43,14 +44,22 @@
     "README.agent.md",
     "LICENSE",
     "cordis.patch.yml",
+    "client.js",
     "lib"
   ],
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-plugin-manager"
+      ]
     }
   },
   "dependencies": {
+    "@deepseek-ai/schemastery": "^3.18.0",
     "markitdown-node": "^1.5.2"
   },
   "peerDependencies": {

@@ -81,6 +81,13 @@ dsh-md-convert scan.pdf -o ./md --ocr-python "C:\path\to\python.exe"
 # 检查 / 安装 OCR 依赖与模型
 dsh-md-convert check        # 只检查状态,不安装
 dsh-md-convert deps         # 安装缺失依赖并预下载 OCR 模型到本地(需联网一次,之后离线可用)
+
+# 转换缓存(默认开启:同一文件内容未变时直接命中,不再重转)
+dsh-md-convert cache            # 查看缓存目录、条目数、占用
+dsh-md-convert cache clear      # 清空缓存
+dsh-md-convert cache prune      # 按容量上限清理(默认 2GiB)
+dsh-md-convert a.docx -o ./md --no-cache   # 本次跳过缓存
+dsh-md-convert a.docx -o ./md --refresh    # 强制重转并刷新缓存
 ```
 
 完整选项见 `dsh-md-convert --help`。
@@ -105,6 +112,7 @@ dsh-md-convert deps         # 安装缺失依赖并预下载 OCR 模型到本地
 
 ```
 ✓ markitdown  → ./md/a.md
+✓ markitdown [缓存命中]  → ./md/a.md
 ✗ [E_OCR_EMPTY] 扫描件未识别出任何内容  C:\docs\扫描件.pdf
 ✗ [E_FILE_NOT_FOUND] 文件不存在:...  C:\docs\缺失.docx
 ```
@@ -117,10 +125,12 @@ dsh-md-convert deps         # 安装缺失依赖并预下载 OCR 模型到本地
 
 ```
 md_convert({ file: "报告.docx", outDir: "./md" })
-→ { ok: true, output: "./md/报告.md", chain: "markitdown", warnings: [] }
+→ { ok: true, output: "./md/报告.md", chain: "markitdown", cached: false, warnings: [] }
 ```
 
-插件配置(`cordis.patch.yml`):
+同一文件再次调用且内容未变时返回 `cached: true`(并带 `cachedAt`),不会重新转换。
+
+插件配置(`cordis.patch.yml`,也可在 DSH 设置里的插件配置页修改):
 
 ```yaml
 - insert:
@@ -139,6 +149,11 @@ md_convert({ file: "报告.docx", outDir: "./md" })
           mode: "worker"      # worker(默认,子进程执行)| in-process(仅诊断;DSH 宿主内会失败)
           node: ""            # 运行 worker 的解释器;空则自动探测
           timeoutMs: 0        # worker 超时毫秒;0 = 不超时
+        cache:
+          enabled: true       # 转换缓存:命中直接返回,不再重转
+          dir: ""             # 缓存目录;空则 $DSH_HOME/md-convert-cache
+          maxBytes: 2147483648 # 容量上限(字节);0 = 不限
+          maxAgeDays: 0       # 最长保留天数;0 = 不限
 ```
 
 ## markitdown 执行方式(默认子进程)
@@ -179,10 +194,23 @@ punycode,而非已废弃的内置模块),正好命中该缺陷,导致**在宿主
 - 进程异常退出时,`exit`/信号钩子兜底清理,下次运行自动清扫历史残留
 - OCR 无中间文件(Python 侧内存完成);调试可用 `--keep-temp` 保留
 
+## 转换缓存
+
+转换结果按**内容寻址**缓存:缓存文件名 = 文件内容 SHA-256 + 转换选项指纹。
+
+- 首次转换后写入缓存;**同一文件内容未变,再次调用直接返回缓存**,不再启动 markitdown / OCR / COM
+- 文件内容变了自动失效;`forceOcr`、`ocrScale`、`legacy.backend` 或插件版本变化也会失效
+- 同机**所有 agent、会话、profile 共享**同一缓存目录(默认 `$DSH_HOME/md-convert-cache`,未设 `$DSH_HOME` 时为 `~/.dsh/md-convert-cache`)
+- 目录由 `cache.dir` 配置,或在 DSH 设置的插件配置页修改;亦可用 `MD_CONVERT_CACHE_DIR` 环境变量
+- 容量默认上限 2 GiB,超限按"最久未使用"淘汰;`cache status|clear|prune` 手动管理
+- **设置面**:侧边栏「插件」→ `dsh-md-convert` 详情页,「说明」下方可直接改缓存目录(带「浏览…」目录选择)、启用开关、容量上限与保留天数;写入持久化到 profile 的 `cordis.patch.yml`
+- 缓存写入失败只告警,不影响本次转换
+- ⚠️ 缓存目录里是文档转换后的正文,涉密文档请自行清空(`dsh-md-convert cache clear`)
+
 ## 测试
 
 ```sh
-npm test                       # 单元测试(后端分流、LibreOffice mock)
+npm test                       # 单元测试(后端分流、LibreOffice mock、转换缓存)
 node test/run-smoke.mjs        # 7 格式冒烟(Windows 需 WPS/Office;Linux 需 LibreOffice)
 node test/run-smoke.mjs --all --reference   # 全量 8 格式(含扫描件 OCR),并把参考输出写入 test/fixtures/final-out/
 ```

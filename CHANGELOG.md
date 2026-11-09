@@ -1,5 +1,48 @@
 # Changelog
 
+## [0.6.0] — 转换缓存与设置页
+
+### 新增:内容寻址转换缓存(不再重复转换)
+
+- 新增 `lib/core/cache.js`:缓存键 = 文件内容 SHA-256 + 转换选项指纹
+  (`forceOcr` / `ocrScale` / `legacy.backend`)+ 插件版本;缓存文件按内容寻址,
+  不建数据库。命中直接返回缓存正文,**不再启动 markitdown / OCR / COM**。
+- 缓存对象是「转换正文」,标题与溯源注释在输出时重新组装,因此改 `--no-title` /
+  `--no-meta`、或文件改名移动都不会造成无谓失效。
+- 原子写(tmp + rename)、进程内单飞(同 key 并发只转一次)、损坏/截断条目自动视为未命中、
+  缓存写失败只告警不阻断转换。
+- 容量治理:`cache.maxBytes`(默认 2 GiB)+ `cache.maxAgeDays`(默认不限),
+  写入超限按 mtime 从旧到新淘汰;`cacheClear` 只删缓存文件,不动目录内其它文件。
+- 默认目录 `$DSH_HOME/md-convert-cache`(可用 `cache.dir` 或 `MD_CONVERT_CACHE_DIR` 覆盖);
+  同机所有 agent / 会话 / profile 共享。
+
+### 工具与 CLI
+
+- `md_convert` 结果新增 `cached` / `cachedAt`;命中时渲染 `md_convert 完成(缓存命中)`。
+- CLI 新增 `cache status|clear|prune` 子命令与 `--no-cache` / `--refresh` / `--cache-dir` 参数;
+  成功行标注 `[缓存命中]`。
+
+### 配置
+
+- 新增 `export const Config`(`@deepseek-ai/schemastery`):配置项可在 `cordis.patch.yml`
+  或 DSH 设置的插件配置页修改,并包含 `cache` 段。schema 保留未知键,老配置不会被判无效。
+
+### 设置面
+
+- 新增 `client.js`(浏览器半区):侧边栏「插件」→ 本插件详情页内联配置卡(DSH 0.2.0 起的
+  `plugins.bundle.config`;旧宿主自动回退到行的「>」二级页),可改缓存目录(带目录选择器)、
+  启用开关、容量上限与保留天数,并显示缓存条目数与占用。
+- 新增 `lib/core/settings.js`:host 侧 `GET/POST /dsh-md-convert/api/v1/settings`,写入经
+  `configEditor.edit` 持久化到 profile patch;要求 `application/json` 且同源,无 webServer
+  的环境(独立 CLI、headless)自动跳过。路径刻意避开 `/api` 前缀——宿主的连接栅栏接管整段
+  `/api`,非 `/api` 的 exact 路由才会直达处理器。
+
+### 测试
+
+- 新增 `test/cache.test.mjs`(键计算 / 命中 / 内容变 / 选项变 / 禁用 / 损坏 / 淘汰 / 清理 / 目录优先级)。
+- 冒烟测试显式关闭缓存,避免污染真实缓存目录。
+- `npm test` 25/25 通过。
+
 ## [0.5.7] — 宿主内 MarkItDown 改由子进程执行
 
 ### 修掉「宿主内 Office/PDF 转换必失败」的根因

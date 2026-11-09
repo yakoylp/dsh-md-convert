@@ -82,6 +82,13 @@ dsh-md-convert scan.pdf -o ./md --ocr-python "C:\path\to\python.exe"
 # Check / install OCR deps and models
 dsh-md-convert check        # status only, no install
 dsh-md-convert deps         # install missing deps and pre-download OCR models (one network run; offline afterwards)
+
+# Conversion cache (on by default: unchanged files return the cached result)
+dsh-md-convert cache            # show cache dir, entry count, size
+dsh-md-convert cache clear      # wipe the cache
+dsh-md-convert cache prune      # prune down to the size limit (2 GiB default)
+dsh-md-convert a.docx -o ./md --no-cache   # bypass the cache for this run
+dsh-md-convert a.docx -o ./md --refresh    # force reconvert and refresh the cache
 ```
 
 Full options: `dsh-md-convert --help`.
@@ -106,6 +113,7 @@ Every failure carries a **stable error code** so callers (CLI / agent tool / SDK
 
 ```
 ✓ markitdown  → ./md/a.md
+✓ markitdown [cache hit]  → ./md/a.md
 ✗ [E_OCR_EMPTY] No text recognized in scanned page  C:\docs\scan.pdf
 ✗ [E_FILE_NOT_FOUND] File not found:...  C:\docs\missing.docx
 ```
@@ -118,10 +126,12 @@ After installing the plugin, agents can use the `md_convert` tool:
 
 ```
 md_convert({ file: "report.docx", outDir: "./md" })
-→ { ok: true, output: "./md/report.md", chain: "markitdown", warnings: [] }
+→ { ok: true, output: "./md/report.md", chain: "markitdown", cached: false, warnings: [] }
 ```
 
-Plugin config (`cordis.patch.yml`):
+Calling it again for an unchanged file returns `cached: true` (plus `cachedAt`) without reconverting.
+
+Plugin config (`cordis.patch.yml`, also editable from the DSH plugin configuration page):
 
 ```yaml
 - insert:
@@ -140,6 +150,11 @@ Plugin config (`cordis.patch.yml`):
           mode: "worker"      # worker (default, subprocess) | in-process (diagnostics only; fails inside a DSH host)
           node: ""            # interpreter for the worker; empty = auto-detect
           timeoutMs: 0        # worker timeout in ms; 0 = no timeout
+        cache:
+          enabled: true       # conversion cache: unchanged files return immediately
+          dir: ""             # cache dir; empty = $DSH_HOME/md-convert-cache
+          maxBytes: 2147483648 # size cap in bytes; 0 = unlimited
+          maxAgeDays: 0       # max retention in days; 0 = unlimited
 ```
 
 ## How MarkItDown runs (subprocess by default)
@@ -184,10 +199,30 @@ Use `--legacy-backend wps | office | libreoffice` to force a specific backend (e
 - On abnormal exit, `exit`/signal hooks clean up; the next run sweeps any leftovers
 - OCR produces no intermediate files (done in Python memory); use `--keep-temp` for debugging
 
+## Conversion cache
+
+Results are cached by **content**: the cache file name is the source content's SHA-256 plus a
+fingerprint of the conversion options.
+
+- After the first conversion the result is stored; **calling again for unchanged content returns the
+  cached Markdown immediately** — no markitdown / OCR / COM run
+- Changing the file invalidates it; so does a change to `forceOcr`, `ocrScale`, `legacy.backend`, or
+  the plugin version
+- Every agent, session and profile **on the same machine shares one cache dir** (default
+  `$DSH_HOME/md-convert-cache`, or `~/.dsh/md-convert-cache` when `$DSH_HOME` is unset)
+- Point it elsewhere with `cache.dir`, `MD_CONVERT_CACHE_DIR`, or the DSH plugin configuration page
+- The default cap is 2 GiB; over the cap the least-recently-used entries are evicted. Manage it with
+  `cache status|clear|prune`
+- **Settings surface**: sidebar **Plugins** → `dsh-md-convert` → the form below the description edits
+  the cache dir (with a folder picker), the enable switch, the size cap and the retention, saved into
+  the profile's `cordis.patch.yml`
+- A failed cache write is only a warning and never blocks the conversion
+- ⚠️ The cache holds converted document text; clear it (`dsh-md-convert cache clear`) for sensitive files
+
 ## Tests
 
 ```sh
-npm test                       # unit tests (backend split, LibreOffice mock)
+npm test                       # unit tests (backend split, LibreOffice mock, conversion cache)
 node test/run-smoke.mjs        # smoke across 7 formats (Windows: WPS/Office; Linux: LibreOffice)
 node test/run-smoke.mjs --all --reference   # all 8 formats (incl. scanned OCR) and write reference outputs to test/fixtures/final-out/
 ```

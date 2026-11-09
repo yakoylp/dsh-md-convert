@@ -50,6 +50,7 @@ try {
 			outDir: perFileDir,
 			forceOcr,
 			legacy: { backend: "auto" },
+			cache: { enabled: false }, // 测试不写真实缓存目录
 		});
 		if (r.ok) {
 			const target = join(outDir, `${basename(f)}.md`);
